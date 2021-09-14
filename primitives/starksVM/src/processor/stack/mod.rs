@@ -104,7 +104,6 @@ impl Stack {
 
 			OpCode::RescR => self.op_rescr(),
 			OpCode::Sha256 => self.op_sha256(),
-
 		}
 	}
 
@@ -610,24 +609,23 @@ impl Stack {
 		self.copy_state(4);
 	}
 
-    fn op_sha256(&mut self) {
-        assert!(self.depth >= 2, "stack underflow at step {}", self.step);
-        let x1 = self.registers[0][self.step - 1];
-        let x2 = self.registers[1][self.step - 1];
+	fn op_sha256(&mut self) {
+		assert!(self.depth >= 2, "stack underflow at step {}", self.step);
+		let x1 = self.registers[0][self.step - 1];
+		let x2 = self.registers[1][self.step - 1];
 
-        let y1 = self.registers[2][self.step - 1];
-        let y2 = self.registers[3][self.step - 1];
+		let y1 = self.registers[2][self.step - 1];
+		let y2 = self.registers[3][self.step - 1];
 
-        self.registers[0][self.step] = field::sha256_a(y1, y2, x1, x2);
-        self.registers[1][self.step] = field::sha256_b(y1, y2, x1, x2);
+		self.registers[0][self.step] = field::sha256_a(y1, y2, x1, x2);
+		self.registers[1][self.step] = field::sha256_b(y1, y2, x1, x2);
 
-        // self.registers[0][self.step] = field::sha256_a(x1, x2, y1, y2);
-        // self.registers[1][self.step] = field::sha256_b(x1, x2, y1, y2);
+		// self.registers[0][self.step] = field::sha256_a(x1, x2, y1, y2);
+		// self.registers[1][self.step] = field::sha256_b(x1, x2, y1, y2);
 
-        // self.shift_left(2, 1);
-        self.copy_state(4);
-
-    }
+		// self.shift_left(2, 1);
+		self.copy_state(4);
+	}
 	// CRYPTOGRAPHIC OPERATIONS
 	// --------------------------------------------------------------------------------------------
 	fn op_rescr(&mut self) {

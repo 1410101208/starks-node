@@ -198,8 +198,6 @@ pub mod pallet {
 			+ MaybeSerializeDeserialize;
 		/// The overarching event type.
 		type Event: From<Event<Self>> + IsType<<Self as frame_system::Config>::Event>;
-		/// A type for retrieving the validators supposed to be online in a session.
-		// type ValidatorSet: ValidatorSetWithIdentification<Self::AccountId>;
 
 		/// After a task is verified, it can still be stored on chain for a `StorePeriod` of time
 		#[pallet::constant]
@@ -354,10 +352,7 @@ pub mod pallet {
 				!TaskParams::<T>::try_get(&who, (&program_hash, &public_inputs)).is_ok(),
 				Error::<T>::TaskAlreadyExists
 			);
-			ensure!(
-				public_inputs.len() <= 8,
-				Error::<T>::PublicInputsMoreThan8Element
-			);
+			ensure!(public_inputs.len() <= 8, Error::<T>::PublicInputsMoreThan8Element);
 			let timestamp = <frame_system::Pallet<T>>::block_number();
 			<TaskParams<T>>::insert(
 				&who,
@@ -371,13 +366,16 @@ pub mod pallet {
 					expiration: Some(<frame_system::Pallet<T>>::block_number()),
 				},
 			);
-			<OngoingTasks<T>>::insert(&who, (&program_hash, &public_inputs, timestamp), Status::default());
+			<OngoingTasks<T>>::insert(
+				&who,
+				(&program_hash, &public_inputs, timestamp),
+				Status::default(),
+			);
 			Self::deposit_event(Event::TaskCreated(who, program_hash, public_inputs, proof_id));
 			Ok(())
 		}
 
 		/// Modify and restart a task, if proof or outputs or anything of the task is wrong
-		
 		#[pallet::weight(10000)]
 		pub fn modify_task(
 			origin: OriginFor<T>,
@@ -388,27 +386,25 @@ pub mod pallet {
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			let task_to_modify = TaskParams::<T>::try_get(&who, (&program_hash, &public_inputs));
-			ensure!(
-				task_to_modify.is_ok(),
-				Error::<T>::TaskNotExists
-			);
-			let TaskInfo { proof_id, public_inputs, outputs, program_hash, is_task_finish, expiration } = task_to_modify.unwrap();
+			ensure!(task_to_modify.is_ok(), Error::<T>::TaskNotExists);
+			let TaskInfo {
+				proof_id,
+				public_inputs,
+				outputs,
+				program_hash,
+				is_task_finish,
+				expiration,
+			} = task_to_modify.unwrap();
 
 			let task_status = is_task_finish.unwrap();
-			ensure!(
-				task_status != TaskStatus::Verifying,
-				Error::<T>::TaskNotFinish
-			);
-			ensure!(
-				task_status != TaskStatus::JustCreated,
-				Error::<T>::TaskNotFinish
-			);
+			ensure!(task_status != TaskStatus::Verifying, Error::<T>::TaskNotFinish);
+			ensure!(task_status != TaskStatus::JustCreated, Error::<T>::TaskNotFinish);
 
-			ensure!(
-				public_inputs.len() <= 8,
-				Error::<T>::PublicInputsMoreThan8Element
+			ensure!(public_inputs.len() <= 8, Error::<T>::PublicInputsMoreThan8Element);
+			<SettledTasks<T>>::remove(
+				expiration.unwrap(),
+				(who.clone(), program_hash.clone(), public_inputs.clone()),
 			);
-			<SettledTasks<T>>::remove(expiration.unwrap(), (who.clone(), program_hash.clone(), public_inputs.clone()));
 			<TaskParams<T>>::insert(
 				&who,
 				(&program_hash, &public_inputs),
@@ -422,14 +418,19 @@ pub mod pallet {
 				},
 			);
 			let timestamp = <frame_system::Pallet<T>>::block_number();
-			<OngoingTasks<T>>::insert(&who, (&program_hash, &public_inputs, timestamp), Status::default());
-			Self::deposit_event(Event::ModifyTaskCreated(who, program_hash, public_inputs, proof_id));
+			<OngoingTasks<T>>::insert(
+				&who,
+				(&program_hash, &public_inputs, timestamp),
+				Status::default(),
+			);
+			Self::deposit_event(Event::ModifyTaskCreated(
+				who,
+				program_hash,
+				public_inputs,
+				proof_id,
+			));
 			Ok(())
-		
 		}
-
-
-
 
 		/// Submit a verification with certain receipt.
 		///
@@ -570,10 +571,10 @@ pub mod pallet {
 	// Runs after every block.
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-		fn on_finalize(block: T::BlockNumber) {			
+		fn on_finalize(block: T::BlockNumber) {
 			let mut res = SettledTasks::<T>::iter_prefix(block).collect::<Vec<_>>();
 			let size = res.len();
-			for _i in 0..size{
+			for _i in 0..size {
 				let round = res.pop().unwrap();
 				let first = round.0;
 				let account_id = first.0;
@@ -677,7 +678,8 @@ impl<T: Config> Pallet<T> {
 
 			let storage = StorageValueRef::persistent(&storage_key);
 
-			let mut task_id_tuple: (T::AccountId, ([u8; 32], Vec<u128>, T::BlockNumber)) = Default::default();
+			let mut task_id_tuple: (T::AccountId, ([u8; 32], Vec<u128>, T::BlockNumber)) =
+				Default::default();
 			let mut initial_local_tasks = BTreeSet::new();
 
 			let res = storage.mutate(
