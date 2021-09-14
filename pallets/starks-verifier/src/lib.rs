@@ -307,6 +307,8 @@ pub mod pallet {
 		NotAllowed,
 		/// Task does not exist
 		TaskNotExists,
+		/// Public inputs should not more than 8 elements
+		PublicInputsMoreThan8Element,
 		/// Duplicated Submission
 		DuplicatedSubmission,
 		/// KYCListNotHaveThisOne
@@ -347,6 +349,10 @@ pub mod pallet {
 			ensure!(
 				!TaskParams::<T>::try_get(&who, (&program_hash, &public_inputs)).is_ok(),
 				Error::<T>::TaskAlreadyExists
+			);
+			ensure!(
+				public_inputs.len() <= 8,
+				Error::<T>::PublicInputsMoreThan8Element
 			);
 			<TaskParams<T>>::insert(
 				&who,
