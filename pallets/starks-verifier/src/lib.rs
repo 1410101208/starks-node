@@ -96,7 +96,7 @@ pub struct Status {
 /// Receipt about any verification occured
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct VerificationReceipt<AccountId, BlockNumber> {
-	task_tuple_id: (AccountId, ([u8; 32], Vec<u128>)),
+	task_tuple_id: (AccountId, ([u8; 32], Vec<u128>, BlockNumber)),
 	// The Hash of a certain task to be verified
 	program_hash: [u8; 32],
 	// The vec<128> of program public input
@@ -246,7 +246,7 @@ pub mod pallet {
 		Twox64Concat,
 		T::AccountId,
 		Twox64Concat,
-		([u8; 32], Vec<u128>),
+		([u8; 32], Vec<u128>, T::BlockNumber),
 		Status,
 		OptionQuery,
 	>;
@@ -293,6 +293,8 @@ pub mod pallet {
 		RemoveVerifier(T::AccountId),
 		/// A new task is created.
 		TaskCreated(T::AccountId, [u8; 32], Vec<u128>, Vec<u8>),
+		/// A modified task is created.
+		ModifyTaskCreated(T::AccountId, [u8; 32], Vec<u128>, Vec<u8>),
 		/// A verification submitted on chain
 		VerificationSubmitted(T::AccountId, [u8; 32], Vec<u128>, bool, u32, u32, u32),
 		/// A verification submitted by a single verifier
@@ -307,6 +309,8 @@ pub mod pallet {
 		NotAllowed,
 		/// Task does not exist
 		TaskNotExists,
+		/// Task is not finished verifying, should not modify
+		TaskNotFinish,
 		/// Public inputs should not more than 8 elements
 		PublicInputsMoreThan8Element,
 		/// Duplicated Submission
@@ -354,6 +358,7 @@ pub mod pallet {
 				public_inputs.len() <= 8,
 				Error::<T>::PublicInputsMoreThan8Element
 			);
+			let timestamp = <frame_system::Pallet<T>>::block_number();
 			<TaskParams<T>>::insert(
 				&who,
 				(&program_hash, &public_inputs),
@@ -366,10 +371,65 @@ pub mod pallet {
 					expiration: Some(<frame_system::Pallet<T>>::block_number()),
 				},
 			);
-			<OngoingTasks<T>>::insert(&who, (&program_hash, &public_inputs), Status::default());
+			<OngoingTasks<T>>::insert(&who, (&program_hash, &public_inputs, timestamp), Status::default());
 			Self::deposit_event(Event::TaskCreated(who, program_hash, public_inputs, proof_id));
 			Ok(())
 		}
+
+		/// Modify and restart a task, if proof or outputs or anything of the task is wrong
+		
+		#[pallet::weight(10000)]
+		pub fn modify_task(
+			origin: OriginFor<T>,
+			program_hash: [u8; 32],
+			public_inputs: Vec<u128>,
+			modify_outputs: Vec<u128>,
+			modify_proof_id: Vec<u8>,
+		) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			let task_to_modify = TaskParams::<T>::try_get(&who, (&program_hash, &public_inputs));
+			ensure!(
+				task_to_modify.is_ok(),
+				Error::<T>::TaskNotExists
+			);
+			let TaskInfo { proof_id, public_inputs, outputs, program_hash, is_task_finish, expiration } = task_to_modify.unwrap();
+
+			let task_status = is_task_finish.unwrap();
+			ensure!(
+				task_status != TaskStatus::Verifying,
+				Error::<T>::TaskNotFinish
+			);
+			ensure!(
+				task_status != TaskStatus::JustCreated,
+				Error::<T>::TaskNotFinish
+			);
+
+			ensure!(
+				public_inputs.len() <= 8,
+				Error::<T>::PublicInputsMoreThan8Element
+			);
+			<SettledTasks<T>>::remove(expiration.unwrap(), (who.clone(), program_hash.clone(), public_inputs.clone()));
+			<TaskParams<T>>::insert(
+				&who,
+				(&program_hash, &public_inputs),
+				TaskInfo {
+					proof_id: modify_proof_id.clone(),
+					public_inputs: public_inputs.clone(),
+					outputs: modify_outputs,
+					program_hash,
+					is_task_finish: Some(TaskStatus::JustCreated),
+					expiration: Some(<frame_system::Pallet<T>>::block_number()),
+				},
+			);
+			let timestamp = <frame_system::Pallet<T>>::block_number();
+			<OngoingTasks<T>>::insert(&who, (&program_hash, &public_inputs, timestamp), Status::default());
+			Self::deposit_event(Event::ModifyTaskCreated(who, program_hash, public_inputs, proof_id));
+			Ok(())
+		
+		}
+
+
+
 
 		/// Submit a verification with certain receipt.
 		///
@@ -389,9 +449,10 @@ pub mod pallet {
 			let account = receipt.clone().task_tuple_id.0;
 			let program_hash = receipt.clone().task_tuple_id.1 .0;
 			let public_inputs = receipt.clone().task_tuple_id.1 .1;
+			let timestamp = receipt.clone().task_tuple_id.1 .2;
 			<OngoingTasks<T>>::try_mutate_exists(
 				&account.clone(),
-				(&program_hash.clone(), &public_inputs.clone()),
+				(&program_hash.clone(), &public_inputs.clone(), &timestamp.clone()),
 				|last_status| -> DispatchResult {
 					// Last status must exist.Fetch last status,if not exists return error
 					let mut status = last_status.take().ok_or(Error::<T>::TaskNotExists)?;
@@ -616,12 +677,12 @@ impl<T: Config> Pallet<T> {
 
 			let storage = StorageValueRef::persistent(&storage_key);
 
-			let mut task_id_tuple: (T::AccountId, ([u8; 32], Vec<u128>)) = Default::default();
+			let mut task_id_tuple: (T::AccountId, ([u8; 32], Vec<u128>, T::BlockNumber)) = Default::default();
 			let mut initial_local_tasks = BTreeSet::new();
 
 			let res = storage.mutate(
 				|tasks: Result<
-					Option<Option<BTreeSet<(T::AccountId, ([u8; 32], Vec<u128>))>>>,
+					Option<Option<BTreeSet<(T::AccountId, ([u8; 32], Vec<u128>, T::BlockNumber))>>>,
 					StorageRetrievalError,
 				>| {
 					// Check if there is already a lock for that particular task.(hash)
@@ -677,7 +738,7 @@ impl<T: Config> Pallet<T> {
 		auth_index: u32,
 		key: T::AuthorityId,
 		block_number: T::BlockNumber,
-		task_tuple_id: (T::AccountId, ([u8; 32], Vec<u128>)),
+		task_tuple_id: (T::AccountId, ([u8; 32], Vec<u128>, T::BlockNumber)),
 	) -> OffchainResult<T, ()> {
 		let TaskInfo { proof_id, public_inputs, outputs, program_hash, .. } =
 			Self::task_params(&task_tuple_id.0, (&task_tuple_id.1 .0, &task_tuple_id.1 .1));
@@ -786,12 +847,12 @@ impl<T: Config> Pallet<T> {
 
 	/// Pick an on-chain tasks to execute which is not included in `local_tasks`
 	fn task_to_execute(
-		local_tasks: &BTreeSet<(T::AccountId, ([u8; 32], Vec<u128>))>,
-	) -> OffchainResult<T, (T::AccountId, ([u8; 32], Vec<u128>))> {
+		local_tasks: &BTreeSet<(T::AccountId, ([u8; 32], Vec<u128>, T::BlockNumber))>,
+	) -> OffchainResult<T, (T::AccountId, ([u8; 32], Vec<u128>, T::BlockNumber))> {
 		//On-chain ready-to-verify tasks,put all task_hash of OngoingTasks into a vec.
 		let ongoing_tasks_list = BTreeSet::from_iter(OngoingTasks::<T>::iter().map(
-			|(account_id, (program_hash, public_inputs), _)| {
-				(account_id, (program_hash, public_inputs))
+			|(account_id, (program_hash, public_inputs, timestamp), _)| {
+				(account_id, (program_hash, public_inputs, timestamp))
 			},
 		));
 

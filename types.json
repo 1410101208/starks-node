@@ -65,7 +65,9 @@
     "nays": "u32"
   },
   "VerificationReceipt": {
+    "task_tuple_id": "(AccountId, ([u8; 32], Vec<u128>, BlockNumber))",
     "program_hash": "[u8; 32]",
+    "public_input": "Vec<u128>",
     "passed": "bool",
     "submit_at": "BlockNumber",
     "auth_index": "u32",

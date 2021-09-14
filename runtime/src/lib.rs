@@ -367,7 +367,7 @@ where
 }
 
 parameter_types! {
-	pub const StorePeriod: BlockNumber = 1024;
+	pub const StorePeriod: BlockNumber = 600000;
 	pub const WhiteListPeriod: BlockNumber = 150;
 
 	pub const AssetDeposit: Balance = 100 * constants::currency::DOLLARS; // 100 DOLLARS deposit to create asset
@@ -377,7 +377,7 @@ parameter_types! {
 	pub const MetadataDepositPerByte: Balance = 1 * constants::currency::DOLLARS;
 	pub const ApprovalDeposit: Balance = constants::currency::EXISTENTIAL_DEPOSIT;
 	pub const StringLimit: u32 = 50;
-	pub const CrowdFundingLimit: BlockNumber = 60000;
+	pub const CrowdFundingLimit: BlockNumber = 600000;
 	pub const CrowdFundingMetadataDepositBase: Balance = 1_000_000_000_000;
 	pub const MinBalance: Balance = 1;
 	pub const CrowdfundingPalletId: PalletId = PalletId(*b"py/crdfg");
