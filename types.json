@@ -1,4 +1,6 @@
 {
+  "ProgramHash": "[u8; 32]", 
+  "PublicInputs": "Vec<u128>",
   "CrowdfundingDetail": {
     "is_creator": "bool",
     "total_balance": "Option<Balance>"
@@ -65,9 +67,9 @@
     "nays": "u32"
   },
   "VerificationReceipt": {
-    "task_tuple_id": "(AccountId, ([u8; 32], Vec<u128>, BlockNumber))",
-    "program_hash": "[u8; 32]",
-    "public_input": "Vec<u128>",
+    "task_tuple_id": "(AccountId, (ProgramHash, PublicInputs, BlockNumber))",
+    "program_hash": "ProgramHash",
+    "public_input": "PublicInputs",
     "passed": "bool",
     "submit_at": "BlockNumber",
     "auth_index": "u32",
@@ -75,9 +77,9 @@
   },
   "TaskInfo": {
     "proof_id": "Vec<u8>",
-    "inputs": "Vec<u128>",
+    "public_inputs": "PublicInputs",
     "outputs": "Vec<u128>",
-    "program_hash": "[u8; 32]",
+    "program_hash": "ProgramHash",
     "is_task_finish": "Option<TaskStatus>",
     "expiration": "Option<BlockNumber>"
   },
@@ -93,8 +95,8 @@
     "remain_funding": "Balance",
     "is_funding_proceed": "Option<bool>",
     "class_type": "ClassType",
-    "program_hash": "[u8; 32]",
-    "public_inputs": "Vec<u128>",
+    "program_hash": "ProgramHash",
+    "public_inputs": "PublicInputs",
     "ratio": "Balance",
     "logo_and_text_information": "Vec<u8>"
   },
@@ -118,7 +120,7 @@
   },
   "ADD": {
     "kyc_verify_class": "ClassType",
-    "program_hash": "[u8; 32]]"
+    "program_hash": "ProgramHash"
   },
   "DEL": {
     "kyc_verify_class": "ClassType"

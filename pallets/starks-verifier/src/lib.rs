@@ -43,6 +43,7 @@ use sp_runtime::offchain::storage::{MutateStorageError, StorageRetrievalError};
 use primitives_catalog::{
 	inspect::{CheckError, Inspect},
 	regist::ClassTypeRegister,
+	types::{ProgramHash, PublicInputs},
 };
 
 extern crate alloc;
@@ -96,11 +97,11 @@ pub struct Status {
 /// Receipt about any verification occured
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
 pub struct VerificationReceipt<AccountId, BlockNumber> {
-	task_tuple_id: (AccountId, ([u8; 32], Vec<u128>, BlockNumber)),
+	task_tuple_id: (AccountId, (ProgramHash, PublicInputs, BlockNumber)),
 	// The Hash of a certain task to be verified
-	program_hash: [u8; 32],
+	program_hash: ProgramHash,
 	// The vec<128> of program public input
-	public_inputs: Vec<u128>,
+	public_inputs: PublicInputs,
 	// Whether a task is passed or not
 	passed: bool,
 	// Block number at the time submission is created.
@@ -136,11 +137,11 @@ pub struct TaskInfo<BlockNumber> {
 	// The id of the proof,combined with a url to fetch the complete proof later
 	proof_id: Vec<u8>,
 	// Inputs of the task
-	public_inputs: Vec<u128>,
+	public_inputs: PublicInputs,
 	// Outputs of the task
 	outputs: Vec<u128>,
 	// The hash of the program
-	program_hash: [u8; 32],
+	program_hash: ProgramHash,
 	// If false,expiration is the time task created;
 	// If true ,expiration is the time task expired.
 	is_task_finish: Option<TaskStatus>,
@@ -230,7 +231,7 @@ pub mod pallet {
 		Twox64Concat,
 		T::AccountId,
 		Twox64Concat,
-		([u8; 32], Vec<u128>),
+		(ProgramHash, PublicInputs),
 		TaskInfo<T::BlockNumber>,
 		ValueQuery,
 	>;
@@ -244,7 +245,7 @@ pub mod pallet {
 		Twox64Concat,
 		T::AccountId,
 		Twox64Concat,
-		([u8; 32], Vec<u128>, T::BlockNumber),
+		(ProgramHash, PublicInputs, T::BlockNumber),
 		Status,
 		OptionQuery,
 	>;
@@ -257,7 +258,7 @@ pub mod pallet {
 		Twox64Concat,
 		T::BlockNumber,
 		Twox64Concat,
-		(T::AccountId, [u8; 32], Vec<u128>),
+		(T::AccountId, ProgramHash, PublicInputs),
 		Option<bool>,
 		ValueQuery,
 	>;
@@ -290,13 +291,13 @@ pub mod pallet {
 		/// A verifier is removed with `AccountId`.
 		RemoveVerifier(T::AccountId),
 		/// A new task is created.
-		TaskCreated(T::AccountId, [u8; 32], Vec<u128>, Vec<u8>),
+		TaskCreated(T::AccountId, ProgramHash, PublicInputs, Vec<u8>),
 		/// A modified task is created.
-		ModifyTaskCreated(T::AccountId, [u8; 32], Vec<u128>, Vec<u8>),
+		ModifyTaskCreated(T::AccountId, ProgramHash, PublicInputs, Vec<u8>),
 		/// A verification submitted on chain
-		VerificationSubmitted(T::AccountId, [u8; 32], Vec<u128>, bool, u32, u32, u32),
+		VerificationSubmitted(T::AccountId, ProgramHash, PublicInputs, bool, u32, u32, u32),
 		/// A verification submitted by a single verifier
-		SingleVerification(T::AccountId, [u8; 32], Vec<u128>, bool, u32, u32),
+		SingleVerification(T::AccountId, ProgramHash, PublicInputs, bool, u32, u32),
 	}
 
 	#[pallet::error]
@@ -310,19 +311,9 @@ pub mod pallet {
 		/// Task is not finished verifying, should not modify
 		TaskNotFinish,
 		/// Public inputs should not more than 8 elements
-		PublicInputsMoreThan8Element,
+		PublicInputsExceed,
 		/// Duplicated Submission
 		DuplicatedSubmission,
-		/// KYCListNotHaveThisOne
-		ClassTypeListNotHaveThisOne,
-		/// KYCListAlreadyHaveThisOne
-		ClassTypeListAlreadyHaveThisOne,
-		/// KYCClassIsEmpty
-		ClassTypeIsEmpty,
-		/// KYCProgramIsEmpty
-		ProgramIsEmpty,
-		/// class type not store on chain
-		ClassTypeNotExsit,
 	}
 
 	#[pallet::call]
@@ -341,7 +332,7 @@ pub mod pallet {
 		#[pallet::weight(10000)]
 		pub fn create_task(
 			origin: OriginFor<T>,
-			program_hash: [u8; 32],
+			program_hash: ProgramHash,
 			public_inputs: Vec<u128>,
 			outputs: Vec<u128>,
 			proof_id: Vec<u8>,
@@ -352,7 +343,7 @@ pub mod pallet {
 				!TaskParams::<T>::try_get(&who, (&program_hash, &public_inputs)).is_ok(),
 				Error::<T>::TaskAlreadyExists
 			);
-			ensure!(public_inputs.len() <= 8, Error::<T>::PublicInputsMoreThan8Element);
+			ensure!(public_inputs.len() <= 8, Error::<T>::PublicInputsExceed);
 			let timestamp = <frame_system::Pallet<T>>::block_number();
 			<TaskParams<T>>::insert(
 				&who,
@@ -379,7 +370,7 @@ pub mod pallet {
 		#[pallet::weight(10000)]
 		pub fn modify_task(
 			origin: OriginFor<T>,
-			program_hash: [u8; 32],
+			program_hash: ProgramHash,
 			public_inputs: Vec<u128>,
 			modify_outputs: Vec<u128>,
 			modify_proof_id: Vec<u8>,
@@ -400,7 +391,7 @@ pub mod pallet {
 			ensure!(task_status != TaskStatus::Verifying, Error::<T>::TaskNotFinish);
 			ensure!(task_status != TaskStatus::JustCreated, Error::<T>::TaskNotFinish);
 
-			ensure!(public_inputs.len() <= 8, Error::<T>::PublicInputsMoreThan8Element);
+			ensure!(public_inputs.len() <= 8, Error::<T>::PublicInputsExceed);
 			<SettledTasks<T>>::remove(
 				expiration.unwrap(),
 				(who.clone(), program_hash.clone(), public_inputs.clone()),
@@ -678,13 +669,13 @@ impl<T: Config> Pallet<T> {
 
 			let storage = StorageValueRef::persistent(&storage_key);
 
-			let mut task_id_tuple: (T::AccountId, ([u8; 32], Vec<u128>, T::BlockNumber)) =
+			let mut task_id_tuple: (T::AccountId, (ProgramHash, PublicInputs, T::BlockNumber)) =
 				Default::default();
 			let mut initial_local_tasks = BTreeSet::new();
 
 			let res = storage.mutate(
 				|tasks: Result<
-					Option<Option<BTreeSet<(T::AccountId, ([u8; 32], Vec<u128>, T::BlockNumber))>>>,
+					Option<Option<BTreeSet<(T::AccountId, (ProgramHash, PublicInputs, T::BlockNumber))>>>,
 					StorageRetrievalError,
 				>| {
 					// Check if there is already a lock for that particular task.(hash)
@@ -740,7 +731,7 @@ impl<T: Config> Pallet<T> {
 		auth_index: u32,
 		key: T::AuthorityId,
 		block_number: T::BlockNumber,
-		task_tuple_id: (T::AccountId, ([u8; 32], Vec<u128>, T::BlockNumber)),
+		task_tuple_id: (T::AccountId, (ProgramHash, PublicInputs, T::BlockNumber)),
 	) -> OffchainResult<T, ()> {
 		let TaskInfo { proof_id, public_inputs, outputs, program_hash, .. } =
 			Self::task_params(&task_tuple_id.0, (&task_tuple_id.1 .0, &task_tuple_id.1 .1));
@@ -823,8 +814,8 @@ impl<T: Config> Pallet<T> {
 
 	/// Use Stark_verify to verify every program_hash with proof
 	fn stark_verify(
-		program_hash: &[u8; 32],
-		public_inputs: Vec<u128>,
+		program_hash: &ProgramHash,
+		public_inputs: PublicInputs,
 		outputs: Vec<u128>,
 		proof: &[u8],
 	) -> OffchainResult<T, bool> {
@@ -849,8 +840,8 @@ impl<T: Config> Pallet<T> {
 
 	/// Pick an on-chain tasks to execute which is not included in `local_tasks`
 	fn task_to_execute(
-		local_tasks: &BTreeSet<(T::AccountId, ([u8; 32], Vec<u128>, T::BlockNumber))>,
-	) -> OffchainResult<T, (T::AccountId, ([u8; 32], Vec<u128>, T::BlockNumber))> {
+		local_tasks: &BTreeSet<(T::AccountId, (ProgramHash, PublicInputs, T::BlockNumber))>,
+	) -> OffchainResult<T, (T::AccountId, (ProgramHash, PublicInputs, T::BlockNumber))> {
 		//On-chain ready-to-verify tasks,put all task_hash of OngoingTasks into a vec.
 		let ongoing_tasks_list = BTreeSet::from_iter(OngoingTasks::<T>::iter().map(
 			|(account_id, (program_hash, public_inputs, timestamp), _)| {
@@ -887,8 +878,8 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> Inspect<T::AccountId> for Pallet<T> {
 	fn check(
 		who: &T::AccountId,
-		program_hash: [u8; 32],
-		public_inputs: Vec<u128>,
+		program_hash: ProgramHash,
+		public_inputs: PublicInputs,
 	) -> Result<bool, CheckError> {
 		let is_exist = TaskParams::<T>::try_get(who, (&program_hash, &public_inputs)).is_ok();
 		if is_exist {

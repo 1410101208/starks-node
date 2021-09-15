@@ -13,7 +13,7 @@ use frame_support::pallet_prelude::*;
 // use pallet_starks_verifier::KYCRegister;
 use primitives_catalog::{
 	regist::{ClassError, ClassTypeRegister},
-	types::{ClassType, ProgramOption, ProgramType, Range},
+	types::{ClassType, ProgramOption, ProgramType, Range, ProgramHash, PublicInputs},
 };
 
 #[cfg(feature = "std")]
@@ -42,15 +42,15 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn class_type_list)]
 	pub(super) type ClassTypeList<T: Config> =
-		StorageMap<_, Twox64Concat, ClassType, [u8; 32], ValueQuery>;
+		StorageMap<_, Twox64Concat, ClassType, ProgramHash, ValueQuery>;
 
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
 		///RegulatedTransferSuccess with source, dest, balance
-		ClassTypeRegistration(ClassType, [u8; 32]),
+		ClassTypeRegistration(ClassType, ProgramHash),
 		ClassTypeDelete(ClassType),
-		ClassTypeModify(ClassType, [u8; 32]),
+		ClassTypeModify(ClassType, ProgramHash),
 	}
 
 	#[pallet::error]
@@ -140,7 +140,7 @@ pub mod pallet {
 }
 
 impl<T: Config> ClassTypeRegister for Pallet<T> {
-	fn register(class_type: &ClassType, program_hash: &[u8; 32]) -> Result<bool, ClassError> {
+	fn register(class_type: &ClassType, program_hash: &ProgramHash) -> Result<bool, ClassError> {
 		if ClassTypeList::<T>::try_get(&class_type).is_ok() {
 			return Err(ClassError::ClassAlreadyExist)
 		} else {
@@ -149,7 +149,7 @@ impl<T: Config> ClassTypeRegister for Pallet<T> {
 		}
 	}
 
-	fn get(class_type: &ClassType) -> Result<[u8; 32], ClassError> {
+	fn get(class_type: &ClassType) -> Result<ProgramHash, ClassError> {
 		let program_hash = ClassTypeList::<T>::try_get(class_type.clone());
 		if program_hash.is_ok() {
 			return Ok(program_hash.unwrap())

@@ -23,7 +23,7 @@ use codec::{Decode, Encode};
 use primitives_catalog::{
 	inspect::CheckError,
 	regist::ClassTypeRegister,
-	types::{ClassType, ProgramOption, ProgramType, Range},
+	types::{ClassType, ProgramOption, ProgramType, Range, ProgramHash, PublicInputs},
 };
 use sp_runtime::{traits::StaticLookup, RuntimeDebug};
 use sp_std::{
@@ -59,9 +59,9 @@ pub struct CrowdfundingStatus<AccountId, BlockNumber, Balance> {
 	// ClassType of KYC
 	pub class_type: ClassType,
 	// The program_hash of this crowdfunding limitaion
-	pub program_hash: [u8; 32],
+	pub program_hash: ProgramHash,
 	// ClassType with public inputs
-	pub public_inputs: Vec<u128>,
+	pub public_inputs: PublicInputs,
 	// For primitive version ratio stand for 1dot :xZtokens; e.g. ratio = 4, 1dot can buy 4Ztokens.
 	pub ratio: Balance,
 	// For storing logo and text information via IPFS
@@ -273,15 +273,15 @@ pub mod pallet {
 		// In creating crowdfunding, admin doesn't have enough asset to dispense
 		AdminNotHaveEnoughAsset,
 		// Admin Account doesn't have enough ztoken
-		CrowdfundingNotHaveEnoughZtoken,
+		NotHaveEnoughZtoken,
 		// The crowdfunding period must less than `CrowdFundingLimit`
-		CrowdFundingTimeTooLong,
+		TimeTooLong,
 		// A crowdfunding is created shouldn't create another one.
-		CrowdFundingAlreadyGoingOn,
+		AlreadyGoingOn,
 		// CrowdfundingAccountNotHaveEnoughAsset
-		CrowdfundingAccountNotHaveEnoughAsset,
+		AccountNotHaveEnoughAsset,
 		// CrowdFunding shouldn't be zero
-		CrowdFundingAmountIsZero,
+		AmountIsZero,
 		// No corresponding Crowdfudation is on-chain
 		CrowdfundingNotOnchain,
 		// The Crowdfudation is stoped
@@ -289,7 +289,7 @@ pub mod pallet {
 		// Already exceed DDL.
 		CrowdfundingIsOver,
 		// The remainingZtokens is not enought for this transaction.
-		NotEnoughZtokensAvailable,
+		NotEnoughZtokens,
 		// The buyer doesn't have enough Dot.
 		NotHaveEnoughDotToBuy,
 		// Not crowdfunding's admin have no right to do so
@@ -325,7 +325,8 @@ pub mod pallet {
 
 			let CrowdfundingStatus { is_funding_proceed, .. } =
 				Self::crowdfunding_process(asset_id);
-			ensure!(is_funding_proceed == None, Error::<T>::CrowdFundingAlreadyGoingOn);
+			ensure!(is_funding_proceed == None, Error::<T>::AlreadyGoingOn);
+			ensure!(total_asset != T::Balance::default(),Error::<T>::AmountIsZero);
 			if crowdfunding_option == CrowdfundingOption::CreateAsset {
 				let res =
 					<<T as frame_system::Config>::Lookup as StaticLookup>::unlookup(who.clone());
@@ -368,13 +369,13 @@ pub mod pallet {
 				pallet_assets::Pallet::<T>::balance(asset_id, Self::account_id());
 			ensure!(
 				total_asset / T::CrowdFundingMetadataDepositBase::get() <= crowdfunding_account_own,
-				Error::<T>::CrowdfundingAccountNotHaveEnoughAsset
+				Error::<T>::AccountNotHaveEnoughAsset
 			);
 			//Don't know the decimal part of this asset
 			//Ensure the crowdfunding period is limited by some timelimitation.
 			ensure!(
 				funding_period < T::CrowdFundingLimit::get(),
-				Error::<T>::CrowdFundingTimeTooLong
+				Error::<T>::TimeTooLong
 			);
 
 			let now = <frame_system::Pallet<T>>::block_number();
@@ -454,7 +455,7 @@ pub mod pallet {
 				Error::<T>::CrowdfundingIsOver
 			);
 			ensure!(is_funding_proceed == Some(true), Error::<T>::CrowdFundingStopped);
-			ensure!(remain_funding >= ztoken_to_buy, Error::<T>::NotEnoughZtokensAvailable);
+			ensure!(remain_funding >= ztoken_to_buy, Error::<T>::NotEnoughZtokens);
 
 			let program_hash_result = T::ClassTypeRegister::get(&class_type);
 			ensure!(program_hash_result.is_ok(), Error::<T>::ClassNotRegistOrWrong);
@@ -487,7 +488,7 @@ pub mod pallet {
 
 				ensure!(
 					result == frame_support::traits::tokens::WithdrawConsequence::Success,
-					Error::<T>::CrowdfundingNotHaveEnoughZtoken
+					Error::<T>::NotHaveEnoughZtoken
 				);
 
 				T::Currency::transfer(
