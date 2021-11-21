@@ -103,7 +103,8 @@ impl Stack {
 			OpCode::BinAcc => self.op_binacc(op_hint),
 
 			OpCode::RescR => self.op_rescr(),
-			OpCode::Sha256 => self.op_sha256(),
+            OpCode::Kvalid     => self.op_kvalid(),
+            OpCode::Khash => self.op_khash(),
 		}
 	}
 
@@ -609,23 +610,72 @@ impl Stack {
 		self.copy_state(4);
 	}
 
-	fn op_sha256(&mut self) {
+	// fn op_sha256(&mut self) {
+	// 	assert!(self.depth >= 2, "stack underflow at step {}", self.step);
+	// 	let x1 = self.registers[0][self.step - 1];
+	// 	let x2 = self.registers[1][self.step - 1];
+
+	// 	let y1 = self.registers[2][self.step - 1];
+	// 	let y2 = self.registers[3][self.step - 1];
+
+	// 	self.registers[0][self.step] = field::sha256_a(y1, y2, x1, x2);
+	// 	self.registers[1][self.step] = field::sha256_b(y1, y2, x1, x2);
+
+	// 	// self.registers[0][self.step] = field::sha256_a(x1, x2, y1, y2);
+	// 	// self.registers[1][self.step] = field::sha256_b(x1, x2, y1, y2);
+
+	// 	// self.shift_left(2, 1);
+	// 	self.copy_state(4);
+	// }
+	fn op_kvalid(&mut self){
+        assert!(self.depth >= 2, "stack underflow at step {}", self.step);
+        let ascii = self.registers[8][self.step - 1];
+        let x1 = self.registers[7][self.step - 1];
+        let x2 = self.registers[6][self.step - 1];
+        let x3 = self.registers[5][self.step - 1];
+        let x4 = self.registers[4][self.step - 1];
+        let x5 = self.registers[3][self.step - 1];
+
+        let content = self.registers[2][self.step - 1];
+        let ctype_2 = self.registers[1][self.step - 1];
+        let ctype_1 = self.registers[0][self.step - 1];
+
+        self.registers[0][self.step] = field::kvalid_a(x1, x2, x3, x4, x5, content, ctype_1, ctype_2, ascii);
+        self.registers[1][self.step] = field::kvalid_b(x1, x2, x3, x4, x5, content, ctype_1, ctype_2, ascii);
+
+        self.shift_left(9, 7);
+    }
+
+	fn op_khash(&mut self){
 		assert!(self.depth >= 2, "stack underflow at step {}", self.step);
-		let x1 = self.registers[0][self.step - 1];
-		let x2 = self.registers[1][self.step - 1];
+		let x1 = self.registers[9][self.step - 1];
+		let y1 = self.registers[10][self.step - 1];
 
-		let y1 = self.registers[2][self.step - 1];
-		let y2 = self.registers[3][self.step - 1];
+		let x2 = self.registers[7][self.step - 1];
+		let y2 = self.registers[8][self.step - 1];
 
-		self.registers[0][self.step] = field::sha256_a(y1, y2, x1, x2);
-		self.registers[1][self.step] = field::sha256_b(y1, y2, x1, x2);
+		let x3 = self.registers[5][self.step - 1];
+		let y3 = self.registers[6][self.step - 1];
 
-		// self.registers[0][self.step] = field::sha256_a(x1, x2, y1, y2);
-		// self.registers[1][self.step] = field::sha256_b(x1, x2, y1, y2);
+		let x4 = self.registers[3][self.step - 1];
+		let y4 = self.registers[4][self.step - 1];
 
-		// self.shift_left(2, 1);
-		self.copy_state(4);
+		let x5 = self.registers[1][self.step - 1];
+		let y5 = self.registers[2][self.step - 1];
+		
+		let index = self.registers[0][self.step - 1];
+		let index_usize = index as usize;
+		self.registers[0][self.step] = field::khash_a(x1, y1, x2, y2, x3, y3, x4, y4, x5, y5);
+		self.registers[1][self.step] = field::khash_b(x1, y1, x2, y2, x3, y3, x4, y4, x5, y5);
+		self.registers[2][self.step] = self.registers[2 * index_usize + 1 ][self.step -1];
+		self.registers[3][self.step] = self.registers[2 * index_usize + 2][self.step -1];
+
+
+		// self.copy_state(7);
+		self.shift_left(11, 7);
+
 	}
+
 	// CRYPTOGRAPHIC OPERATIONS
 	// --------------------------------------------------------------------------------------------
 	fn op_rescr(&mut self) {

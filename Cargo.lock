@@ -389,6 +389,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdb031dd78e28731d87d56cc8ffef4a8f36ca26c38fe2de700543e627f8a464a"
 
 [[package]]
+name = "b2sum-rs"
+version = "0.1.0"
+dependencies = [
+ "blake2-rfc",
+ "hex",
+]
+
+[[package]]
 name = "backtrace"
 version = "0.3.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2542,6 +2550,15 @@ checksum = "64fa110ec7b8f493f416eed552740d10e7030ad5f63b2308f82c9608ec2df275"
 dependencies = [
  "futures 0.3.16",
  "futures-timer 2.0.2",
+]
+
+[[package]]
+name = "iota-crypto"
+version = "0.7.0"
+source = "git+https://github.com/iotaledger/crypto.rs?branch=dev#dd055a4a1df8866228334086c8f13d1a05096bce"
+dependencies = [
+ "blake2",
+ "digest 0.9.0",
 ]
 
 [[package]]
@@ -7268,6 +7285,7 @@ checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
 name = "starksVM"
 version = "0.1.0"
 dependencies = [
+ "b2sum-rs",
  "bincode",
  "blake3",
  "console_error_panic_hook",
@@ -7278,6 +7296,7 @@ dependencies = [
  "getrandom 0.2.3",
  "hashbrown 0.1.8",
  "hex",
+ "iota-crypto",
  "log",
  "num-bigint 0.3.2",
  "parity-scale-codec",
