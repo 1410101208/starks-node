@@ -667,12 +667,10 @@ impl Stack {
 		let index_usize = index as usize;
 		self.registers[0][self.step] = field::khash_a(x1, y1, x2, y2, x3, y3, x4, y4, x5, y5);
 		self.registers[1][self.step] = field::khash_b(x1, y1, x2, y2, x3, y3, x4, y4, x5, y5);
-		self.registers[2][self.step] = self.registers[2 * index_usize + 1 ][self.step -1];
-		self.registers[3][self.step] = self.registers[2 * index_usize + 2][self.step -1];
 
 
 		// self.copy_state(7);
-		self.shift_left(11, 7);
+		self.shift_left(11, 9);
 
 	}
 
